@@ -50,6 +50,7 @@ st.write("Upload an image of your hand (Rock, Paper, Scissors) or click a button
 # --- Upload Image ---
 uploaded_file = st.file_uploader("Upload your hand image...", type=["jpg","jpeg","png"])
 user_label = None
+user_confidence = None
 
 # --- Buttons ---
 col1, col2, col3 = st.columns(3)
@@ -65,12 +66,18 @@ if uploaded_file is not None:
     user_img = Image.open(uploaded_file).convert("RGB")
     st.image(user_img, caption="Your uploaded image", use_column_width=True)
     preprocessed = preprocess_image(user_img)
-    user_label = np.argmax(model.predict(preprocessed, verbose=0))
+    predictions = model.predict(preprocessed, verbose=0)
+    user_label = np.argmax(predictions)
+    user_confidence = predictions[0][user_label]
 
 # --- Play the game ---
 if user_label is not None:
     user_choice_text = label_to_choice[user_label]
-    st.write(f"Your choice: **{user_choice_text}**")
+    if user_confidence is None:
+        # Button press, assume 100% confidence
+        user_confidence = 1.0
+
+    st.write(f"Your choice: **{user_choice_text}** ({user_confidence*100:.2f}% confidence)")
 
     computer_label = random.randint(0, 2)
     computer_choice_text = label_to_choice[computer_label]
