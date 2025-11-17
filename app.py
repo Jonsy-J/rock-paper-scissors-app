@@ -36,12 +36,33 @@ st.markdown(
     """
     <style>
     .stApp {
-        background: url("https://images.unsplash.com/photo-1529070538774-1843cb3265df?fit=crop&w=1950&q=80");
+        /* Dark background color */
+        background-color: #1a1a1a;
+        color: white;
+    }
+
+    /* Optional: make background image darker */
+    .stApp::before {
+        content: "";
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: url("https://images.unsplash.com/photo-1529070538774-1843cb3265df?fit=crop&w=1950&q=80") no-repeat center center;
         background-size: cover;
+        filter: brightness(30%);
+        z-index: -1;
+    }
+
+    /* Make text inside Streamlit readable */
+    .stButton>button {
+        color: black;
     }
     </style>
     """,
     unsafe_allow_html=True
+
 )
 
 st.title("🎮 Rock-Paper-Scissors Game")
@@ -85,3 +106,4 @@ if user_label is not None:
 
     result_text = determine_winner(user_label, computer_label)
     st.success(result_text)
+
