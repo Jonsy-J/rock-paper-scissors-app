@@ -5,87 +5,154 @@ from PIL import Image
 import random
 import os
 
-# --- Page configuration ---
+# --- Page config ---
 st.set_page_config(
-    page_title="Rock-Paper-Scissors Classifier",
+    page_title="Rock-Paper-Scissors Game",
     page_icon="✊✋✌️",
     layout="centered",
+    initial_sidebar_state="expanded"
 )
 
-# --- Header ---
-st.title("✊✋✌️ Rock-Paper-Scissors Classifier ✌️✋✊")
-st.write("Upload an image of your hand to play against the computer.")
+# --- Background styling ---
+st.markdown(
+    """
+    <style>
+    body {
+        background: linear-gradient(to right, #74ebd5, #ACB6E5);
+        color: #333;
+        font-family: 'Segoe UI', sans-serif;
+    }
+    .stButton>button {
+        background-color: #4CAF50;
+        color: white;
+        height: 3em;
+        width: 120px;
+        font-size: 18px;
+        border-radius: 10px;
+        margin: 5px;
+    }
+    .stButton>button:hover {
+        background-color: #45a049;
+        color: white;
+    }
+    .stAlert {
+        font-size: 16px;
+    }
+    </style>
+    """, unsafe_allow_html=True
+)
 
 # --- Load TFLite model ---
-MODEL_PATH = 'rock_paper_scissors_quantized.tflite'
+MODEL_PATH = 'rock_paper_scissors_quantized_mobilenet.tflite'
+interpreter = tf.lite.Interpreter(model_path=MODEL_PATH)
+interpreter.allocate_tensors()
+input_details = interpreter.get_input_details()
+output_details = interpreter.get_output_details()
+input_dtype = input_details[0]['dtype']
 
-if os.path.exists(MODEL_PATH):
-    st.success("Model loaded successfully!")
-    interpreter = tf.lite.Interpreter(model_path=MODEL_PATH)
-    interpreter.allocate_tensors()
-    input_details = interpreter.get_input_details()
-    output_details = interpreter.get_output_details()
-    input_shape = input_details[0]['shape']
-    input_dtype = input_details[0]['dtype']
-else:
-    st.error(f"Model file '{MODEL_PATH}' not found. Please upload it.")
-    st.stop()  # Stop execution if model is missing
-
-# --- Choices ---
+# --- Choices mapping ---
 choices = ['Rock', 'Paper', 'Scissors']
 choice_to_label = {'Rock': 0, 'Paper': 1, 'Scissors': 2}
 label_to_choice = {0: 'Rock', 1: 'Paper', 2: 'Scissors'}
 
 # --- Helper functions ---
-def preprocess_image(image):
-    img = image.resize((150, 150))
-    image_array = np.array(img)
-    image_array = image_array / 255.0
-    image_array = np.expand_dims(image_array, axis=0).astype(input_dtype)
-    return image_array
+def preprocess_image(image_array):
+    if not isinstance(image_array, np.ndarray):
+        image_array = np.array(image_array)
+    if image_array.shape[0] != 150 or image_array.shape[1] != 150:
+        img = Image.fromarray(image_array.astype(np.uint8))
+        img = img.resize((150, 150))
+        image_array = np.array(img)
+    image = image_array / 255.0
+    image = np.expand_dims(image, axis=0)
+    return image.astype(input_dtype)
 
 def make_prediction(preprocessed_input):
     interpreter.set_tensor(input_details[0]['index'], preprocessed_input)
     interpreter.invoke()
-    output = interpreter.get_tensor(output_details[0]['index'])[0]
-    predicted_label = np.argmax(output)
-    confidence_scores = output
-    return predicted_label, confidence_scores
+    output = interpreter.get_tensor(output_details[0]['index'])
+    return np.argmax(output)
 
-def determine_winner(user_label, computer_label):
+def create_dummy_image(label):
+    dummy_img = np.zeros((150, 150, 3), dtype=np.uint8)
+    if label == 0:
+        dummy_img[:,:] = [0,0,0]        # Rock - black
+    elif label == 1:
+        dummy_img[:,:] = [255,255,255]  # Paper - white
+    elif label == 2:
+        dummy_img[:,:] = [127,127,127]  # Scissors - grey
+    return dummy_img
+
+# --- Sidebar Info ---
+st.sidebar.title("Model Info")
+file_size_bytes = os.path.getsize(MODEL_PATH)
+file_size_mb = file_size_bytes / (1024 * 1024)
+st.sidebar.write(f"TFLite model: **{MODEL_PATH}**")
+st.sidebar.write(f"Size: **{file_size_mb:.2f} MB**")
+st.sidebar.write("Uses MobileNetV2 feature extractor and dynamic range quantization.")
+st.sidebar.write("---")
+
+# --- App Title ---
+st.title("🎮 Rock-Paper-Scissors Game")
+st.markdown("Choose your move below and see if you can beat the computer!")
+
+# --- Initialize session state ---
+if 'history' not in st.session_state:
+    st.session_state.history = []
+
+# --- Buttons for player choice ---
+col1, col2, col3 = st.columns(3)
+with col1:
+    if st.button("✊ Rock"):
+        st.session_state.choice = "Rock"
+with col2:
+    if st.button("✋ Paper"):
+        st.session_state.choice = "Paper"
+with col3:
+    if st.button("✌️ Scissors"):
+        st.session_state.choice = "Scissors"
+
+# --- Game logic ---
+if 'choice' in st.session_state:
+    user_choice_text = st.session_state.choice
+    user_label = choice_to_label[user_choice_text]
+
+    computer_choice_text = random.choice(choices)
+    computer_label = choice_to_label[computer_choice_text]
+
+    # Create dummy images and get predictions
+    user_dummy_img = create_dummy_image(user_label)
+    user_pred_label = make_prediction(preprocess_image(user_dummy_img))
+    user_pred_text = label_to_choice[user_pred_label]
+
+    comp_dummy_img = create_dummy_image(computer_label)
+    comp_pred_label = make_prediction(preprocess_image(comp_dummy_img))
+    comp_pred_text = label_to_choice[comp_pred_label]
+
+    # Determine winner
     result_code = (user_label - computer_label + 3) % 3
     if result_code == 0:
-        return "It's a draw!"
+        result_text = "It's a draw!"
     elif result_code == 1:
-        return "You win!"
+        result_text = "You win! 🎉"
     else:
-        return "Computer wins!"
+        result_text = "Computer wins! 🤖"
 
-# --- File uploader ---
-uploaded_file = st.file_uploader("Choose an image of your hand (jpg, png)...", type=["jpg","jpeg","png"])
+    # Store history
+    st.session_state.history.append({
+        'You': user_choice_text,
+        'Computer': computer_choice_text,
+        'Result': result_text
+    })
 
-if uploaded_file is not None:
-    user_image = Image.open(uploaded_file).convert("RGB")
-    st.image(user_image, caption="Your uploaded image", use_column_width=True)
+    # --- Show round info ---
+    st.subheader("Round Results")
+    st.write(f"Your choice: **{user_choice_text}**")
+    st.write(f"Computer choice: **{computer_choice_text}**")
+    st.write(f"Model prediction for your dummy input: **{user_pred_text}**")
+    st.write(f"Model prediction for computer dummy input: **{comp_pred_text}**")
+    st.write(f"🎯 {result_text}")
 
-    if st.button("Play"):
-        # Preprocess user image and predict
-        preprocessed_user = preprocess_image(user_image)
-        user_pred_label, user_confidences = make_prediction(preprocessed_user)
-        user_pred_text = label_to_choice[user_pred_label]
-
-        # Random computer choice
-        computer_pred_text = random.choice(choices)
-        computer_label = choice_to_label[computer_pred_text]
-
-        # Display predictions
-        st.subheader("Predictions")
-        st.write(f"**Your hand prediction:** {user_pred_text}")
-        st.write("Confidence scores:")
-        for i, choice in enumerate(choices):
-            st.write(f"{choice}: {user_confidences[i]:.2f}")
-
-        st.write(f"**Computer choice:** {computer_pred_text}")
-
-        # Determine winner
-        st.success(determine_winner(user_pred_label, computer_label))
+    # --- Show history ---
+    st.subheader("Game History")
+    st.table(st.session_state.history)
