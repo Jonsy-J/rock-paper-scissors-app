@@ -4,7 +4,7 @@ import numpy as np
 from PIL import Image
 import random
 
-# --- Load Model ---
+# --- Load Keras model ---
 MODEL_PATH = "rock_paper_scissors_3_class_mobilenet.keras"
 model = tf.keras.models.load_model(MODEL_PATH)
 
@@ -12,7 +12,7 @@ model = tf.keras.models.load_model(MODEL_PATH)
 choices = ['Rock', 'Paper', 'Scissors']
 label_to_choice = {0: 'Rock', 1: 'Paper', 2: 'Scissors'}
 
-# --- Helper Functions ---
+# --- Helper functions ---
 def preprocess_image(img: Image.Image):
     img = img.resize((150, 150))
     img_array = np.array(img) / 255.0
@@ -30,14 +30,28 @@ def determine_winner(user_label, computer_label):
 
 # --- Streamlit UI ---
 st.set_page_config(page_title="Rock-Paper-Scissors", page_icon="✊✋✌️", layout="centered")
-st.title("🎮 Rock-Paper-Scissors Game")
-st.write("Upload an image of your hand (Rock, Paper, Scissors) or choose a button below:")
 
-# Upload image
+# Custom background
+st.markdown(
+    """
+    <style>
+    .stApp {
+        background: url("https://images.unsplash.com/photo-1529070538774-1843cb3265df?fit=crop&w=1950&q=80");
+        background-size: cover;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+
+st.title("🎮 Rock-Paper-Scissors Game")
+st.write("Upload an image of your hand (Rock, Paper, Scissors) or click a button below:")
+
+# --- Upload Image ---
 uploaded_file = st.file_uploader("Upload your hand image...", type=["jpg","jpeg","png"])
 user_label = None
 
-# Buttons as alternative input
+# --- Buttons ---
 col1, col2, col3 = st.columns(3)
 if col1.button("Rock"):
     user_label = 0
@@ -46,14 +60,14 @@ if col2.button("Paper"):
 if col3.button("Scissors"):
     user_label = 2
 
-# Handle uploaded image
+# --- Handle uploaded image ---
 if uploaded_file is not None:
     user_img = Image.open(uploaded_file).convert("RGB")
     st.image(user_img, caption="Your uploaded image", use_column_width=True)
     preprocessed = preprocess_image(user_img)
     user_label = np.argmax(model.predict(preprocessed, verbose=0))
 
-# Play the game
+# --- Play the game ---
 if user_label is not None:
     user_choice_text = label_to_choice[user_label]
     st.write(f"Your choice: **{user_choice_text}**")
